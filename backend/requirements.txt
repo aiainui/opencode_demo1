@@ -1,4 +1,6 @@
-flask>=2.0.0
-flask-cors>=3.0.0
-sqlalchemy>=1.4.0
-pyjwt>=2.0.0
+Flask==3.0.0
+Flask-CORS==4.0.0
+SQLAlchemy==2.0.23
+PyJWT==2.8.0
+python-dotenv==1.0.0
+gunicorn==21.2.0

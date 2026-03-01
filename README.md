@@ -41,15 +41,15 @@ python app.py
 
 ### 初始化账号
 首次启动会自动创建测试账号：
-- 审核员：`admin` / `123456`
-- 标注员：`annotator1`、`annotator2`、`annotator3` / `123456`
+- 审核员：admin / 123456
+- 标注员：annotator1、annotator2、annotator3 / 123456
 
 ### 功能操作
-1. **导入数据**：点击"导入数据"，粘贴JSON格式数据
-2. **分配任务**：审核员在数据集列表点击"分配"
-3. **标注**：标注员进入"标注"页面，点击"有效"或"无效"
-4. **审核**：审核员进入"审核"页面进行通过/驳回
-5. **导出**：点击数据集"查看"->"导出JSON"
+1. 导入数据：点击"导入数据"，粘贴JSON格式数据
+2. 分配任务：审核员在数据集列表点击"分配"
+3. 标注：标注员进入"标注"页面，点击"有效"或"无效"
+4. 审核：审核员进入"审核"页面进行通过/驳回
+5. 导出：点击数据集"查看"->"导出JSON"
 
 ### JSON数据格式
 ```json
@@ -62,3 +62,23 @@ python app.py
 ## 技术栈
 - 后端：Flask + SQLAlchemy + SQLite
 - 前端：Vue3 (CDN引入)
+
+## Docker 部署
+
+### 构建镜像
+```bash
+docker build -t nlp-annotation-platform .
+```
+
+### 运行容器
+```bash
+docker run -d -p 8000:8000 --name nlp-annotation nlp-annotation-platform
+```
+
+## 环境变量
+
+| 变量 | 默认值 | 说明 |
+|-----|-------|------|
+| PORT | 8000 | 服务端口 |
+| SECRET_KEY | 自动生成 | JWT密钥 |
+| DATABASE_URL | sqlite:///./annotation.db | 数据库连接 |
