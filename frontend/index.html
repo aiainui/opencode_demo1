@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NLP标注平台</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        
+        .header { background: #fff; padding: 15px 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-size: 20px; color: #333; }
+        .header .user-info { display: flex; gap: 15px; align-items: center; }
+        
+        .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        .btn-primary { background: #1890ff; color: #fff; }
+        .btn-success { background: #52c41a; color: #fff; }
+        .btn-danger { background: #ff4d4f; color: #fff; }
+        .btn-secondary { background: #d9d9d9; color: #333; }
+        
+        .card { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
+        .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 14px; }
+        
+        .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .nav-tabs .tab { padding: 10px 20px; background: #fff; border: 1px solid #d9d9d9; border-radius: 4px; cursor: pointer; }
+        .nav-tabs .tab.active { background: #1890ff; color: #fff; border-color: #1890ff; }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #f0f0f0; }
+        th { background: #fafafa; font-weight: 500; }
+        
+        .annotation-box { background: #f9f9f9; padding: 20px; border-radius: 8px; margin-top: 20px; }
+        .annotation-text { font-size: 16px; line-height: 1.8; margin-bottom: 20px; padding: 15px; background: #fff; border: 1px solid #e8e8e8; border-radius: 4px; }
+        
+        .annotation-actions { display: flex; gap: 10px; }
+        .annotation-actions .btn { padding: 12px 30px; font-size: 16px; }
+        
+        .annotation-item { background: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 15px; border: 2px solid #e8e8e8; }
+        .annotation-item.done { border-color: #52c41a; background: #f6ffed; }
+        
+        .label-valid { background: #52c41a !important; }
+        .label-invalid { background: #ff4d4f !important; }
+        
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+        .badge-pending { background: #fffbe6; color: #faad14; }
+        .badge-done { background: #f6ffed; color: #52c41a; }
+        .badge-reviewed { background: #e6f7ff; color: #1890ff; }
+        
+        .extra-fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px; }
+        .extra-field { padding: 8px; background: #f5f5f5; border-radius: 4px; font-size: 13px; }
+        .extra-field .key { color: #666; font-size: 12px; }
+        
+        .empty-state { text-align: center; padding: 60px 20px; color: #999; }
+        
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
+        .modal { background: #fff; padding: 24px; border-radius: 8px; width: 90%; max-width: 500px; }
+        .modal h2 { margin-bottom: 20px; }
+        
+        .password-input { position: relative; }
+        .password-input input { padding-right: 40px; }
+        .password-toggle { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #999; user-select: none; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="header">
+            <h1>NLP标注平台（基于opencode搭建）</h1>
+            <div class="user-info" v-if="user">
+                <span>{{ user.username }} ({{ user.role }})</span>
+                <button class="btn btn-secondary" @click="logout">退出</button>
+            </div>
+        </div>
+        
+        <div class="container" v-if="!user">
+            <div class="card" style="max-width: 400px; margin: 40px auto;">
+                <h2 style="margin-bottom: 20px;">登录</h2>
+                <div class="form-group">
+                    <label>用户名</label>
+                    <input v-model="loginForm.username" type="text" placeholder="请输入用户名">
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <div class="password-input">
+                        <input v-model="loginForm.password" :type="showPassword ? 'text' : 'password'" placeholder="请输入密码" @keyup.enter="login" style="width: 100%; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 4px;">
+                        <span class="password-toggle" @click="showPassword = !showPassword">{{ showPassword ? '👁' : '👁‍🗨' }}</span>
+                    </div>
+                </div>
+                <button class="btn btn-primary" style="width: 100%;" @click="login">登录</button>
+                <p style="margin-top: 15px; text-align: center;">
+                    没有账号？<a href="#" @click.prevent="showRegister = true">注册</a>
+                </p>
+            </div>
+            
+            <div class="modal-overlay" v-if="showRegister">
+                <div class="modal">
+                    <h2>注册用户</h2>
+                    <div class="form-group">
+                        <label>用户名</label>
+                        <input v-model="registerForm.username" type="text">
+                    </div>
+                    <div class="form-group">
+                        <label>密码</label>
+                        <div class="password-input">
+                            <input v-model="registerForm.password" :type="showPassword ? 'text' : 'password'" style="width: 100%; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 4px;">
+                            <span class="password-toggle" @click="showPassword = !showPassword">{{ showPassword ? '👁' : '👁‍🗨' }}</span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>角色</label>
+                        <select v-model="registerForm.role">
+                            <option value="annotator">标注员</option>
+                            <option value="reviewer">审核员</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-primary" @click="register">注册</button>
+                        <button class="btn btn-secondary" @click="showRegister = false">取消</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+            <div class="container" v-else>
+            <!-- 顶部导航（仅显示当前需要的标签） -->
+            <div class="nav-tabs" v-if="currentTab !== 'annotate' && currentTab !== 'review'">
+                <div class="tab" :class="{active: currentTab === 'datasets'}" @click="currentTab = 'datasets'">数据集</div>
+                <div class="tab" :class="{active: currentTab === 'users'}" @click="currentTab = 'users'" v-if="user.role === 'admin'">用户管理</div>
+            </div>
+            
+            <div v-if="currentTab === 'datasets'">
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h2>数据集列表</h2>
+                        <button class="btn btn-primary" @click="showImport = true">导入数据</button>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>名称</th>
+                                <th>状态</th>
+                                <th>数据条数</th>
+                                <th>已标注</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="ds in datasets" :key="ds.id">
+                                <td>{{ ds.id }}</td>
+                                <td>{{ ds.name }}</td>
+                                <td><span class="badge" :class="'badge-' + ds.status">{{ ds.status }}</span></td>
+                                <td>{{ ds.item_count }}</td>
+                                <td>{{ ds.annotated_count }}</td>
+                                <td>{{ formatDate(ds.created_at) }}</td>
+                                <td>
+                                    <button class="btn btn-primary" style="margin-right: 5px;" @click="viewDataset(ds)">查看</button>
+                                    <button class="btn btn-success" style="margin-right: 5px;" @click="exportDataset(ds)">导出</button>
+                                    <button class="btn btn-success" v-if="canAnnotate" style="margin-right: 5px;" @click="startAnnotation(ds)">标注</button>
+                                    <button class="btn btn-success" v-if="canReview" style="margin-right: 5px;" @click="startReview(ds)">审核</button>
+                                    <button class="btn btn-success" v-if="canDistribute" style="margin-right: 5px;" @click="showDistribute(ds)">分配</button>
+                                    <button class="btn btn-danger" v-if="canDistribute" @click="deleteDataset(ds)">删除</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div v-if="datasets.length === 0" class="empty-state">暂无数据集</div>
+                </div>
+            </div>
+            
+            <div v-if="currentTab === 'annotate'">
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <div>
+                            <button class="btn btn-secondary" @click="goBackToDatasets" style="margin-right: 10px;">← 返回</button>
+                            <h2 style="display: inline;">标注任务: {{ selectedDataset ? selectedDataset.name : '全部' }}</h2>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <select v-model="annotationFilter" @change="onFilterChange" style="padding: 8px; border: 1px solid #d9d9d9; border-radius: 4px;">
+                                <option value="all">全部</option>
+                                <option value="unannotated">未标注</option>
+                                <option value="annotated">已标注</option>
+                                <option value="unreviewed">未审核</option>
+                                <option value="approved">通过</option>
+                                <option value="rejected">驳回</option>
+                            </select>
+                            <button class="btn btn-primary" @click="refreshAnnotation" v-if="currentItems.length > 0">刷新任务</button>
+                        </div>
+                    </div>
+                    
+                    <div v-if="currentItems.length > 0">
+                        <div v-for="(item, index) in currentItems" :key="item.id" class="annotation-item" :class="{done: item.annotation}">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <span style="font-weight: bold;">{{ (currentPage - 1) * 5 + index + 1 }}.</span>
+                                <span class="badge" :class="item.annotation ? (item.annotation.label ? 'badge-done' : 'badge-pending') : 'badge-pending'">
+                                    {{ item.annotation ? (item.annotation.label ? '已标注-有效' : '已标注-无效') : '待标注' }}
+                                </span>
+                            </div>
+                            <div style="margin-bottom: 10px; color: #666;">
+                                <span>ID: {{ item.external_id }}</span> | 
+                                <span>来源: {{ item.source }}</span>
+                                <span v-if="item.annotation"> | 标注人: {{ item.annotation.annotator_name || '未知' }}</span>
+                                <span v-if="item.annotation"> | 标注时间: {{ formatDate(item.annotation.updated_at) }}</span>
+                            </div>
+                            <div class="annotation-text">{{ item.text }}</div>
+                            <div v-if="item.annotation && item.annotation.remark" style="margin-bottom: 10px; color: #666; font-size: 13px;">
+                                备注: {{ item.annotation.remark }}
+                            </div>
+                            <div class="annotation-actions">
+                                <button class="btn label-valid" @click="submitAnnotation(item, true)">有效 ✓</button>
+                                <button class="btn label-invalid" @click="submitAnnotation(item, false)">无效 ✗</button>
+                            </div>
+                            <div style="margin-top: 10px;">
+                                <input v-model="item.remark" type="text" placeholder="备注 (非必填)" style="width: 100%; padding: 8px; border: 1px solid #d9d9d9; border-radius: 4px;">
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; justify-content: center; gap: 10px; margin-top: 20px;">
+                            <button class="btn btn-secondary" @click="prevPage" :disabled="currentPage <= 1">上一页</button>
+                            <button class="btn btn-secondary" @click="nextPage" :disabled="currentPage >= totalPages || currentItems.length < 5">下一页</button>
+                        </div>
+                    </div>
+                    
+                    <div v-if="currentItems.length === 0" class="empty-state">
+                        暂无待标注任务
+                    </div>
+                </div>
+            </div>
+            
+            <div v-if="currentTab === 'review'">
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <div>
+                            <button class="btn btn-secondary" @click="currentTab = 'datasets'; selectedDataset = null" style="margin-right: 10px;">← 返回</button>
+                            <h2 style="display: inline;">审核任务: {{ selectedDataset ? selectedDataset.name : '全部' }}</h2>
+                        </div>
+                        <select v-model="reviewFilter" @change="onReviewFilterChange" style="padding: 8px; border: 1px solid #d9d9d9; border-radius: 4px;">
+                            <option value="all">全部</option>
+                            <option value="unreviewed">未审核</option>
+                            <option value="reviewed">已审核</option>
+                        </select>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>文本</th>
+                                <th>标注结果</th>
+                                <th>状态</th>
+                                <th>审核人</th>
+                                <th>审核时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="item in reviewItems" :key="item.id">
+                                <td>{{ item.id }}</td>
+                                <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">{{ item.text }}</td>
+                                <td>
+                                    <span class="badge" :class="item.annotation && item.annotation.label ? 'badge-done' : 'badge-pending'">
+                                        {{ item.annotation ? (item.annotation.label ? '有效' : '无效') : '未标注' }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge" :class="item.annotation && item.annotation.reviewed ? (item.annotation.reviewed_by ? 'badge-done' : 'badge-pending') : 'badge-pending'">
+                                        {{ item.annotation && item.annotation.reviewed ? (item.annotation.reviewed_by ? '通过' : '驳回') : '待审核' }}
+                                    </span>
+                                </td>
+                                <td>{{ item.annotation ? (item.annotation.reviewer_name || '-') : '-' }}</td>
+                                <td>{{ item.annotation && item.annotation.reviewed ? formatDate(item.annotation.updated_at) : '-' }}</td>
+                                <td>
+                                    <button class="btn btn-success" style="margin-right: 5px;" @click="approveReview(item)">通过</button>
+                                    <button class="btn btn-danger" @click="rejectReview(item)">驳回</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div v-if="reviewItems.length === 0" class="empty-state">暂无待审核数据</div>
+                </div>
+            </div>
+            
+            <!-- 用户管理 -->
+            <div v-if="currentTab === 'users'" class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>用户管理</h2>
+                    <button class="btn btn-primary" @click="showUserModal = true">添加用户</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>用户名</th>
+                            <th>角色</th>
+                            <th>权限</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="u in allUsers" :key="u.id">
+                            <td>{{ u.id }}</td>
+                            <td>{{ u.username }}</td>
+                            <td>
+                                <select v-model="u.role" @change="updateUserRole(u)" :disabled="u.id === user.id">
+                                    <option value="annotator">标注员</option>
+                                    <option value="reviewer">审核员</option>
+                                    <option value="admin">管理员</option>
+                                </select>
+                            </td>
+                            <td>
+                                <span class="badge badge-done" v-if="u.role === 'admin'">查看/标注/审核/分配</span>
+                                <span class="badge badge-pending" v-else-if="u.role === 'reviewer'">查看/标注/审核</span>
+                                <span class="badge badge-reviewed" v-else>查看/标注</span>
+                            </td>
+                            <td>{{ formatDate(u.created_at) }}</td>
+                            <td>
+                                <button class="btn btn-danger" @click="deleteUser(u)" v-if="u.id !== user.id">删除</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="modal-overlay" v-if="showImport">
+                <div class="modal">
+                    <h2>导入JSON数据</h2>
+                    <div class="form-group">
+                        <label>数据集名称</label>
+                        <input v-model="importForm.name" type="text" placeholder="请输入数据集名称">
+                    </div>
+                    <div class="form-group">
+                        <label>JSON数据 (数组)</label>
+                        <textarea v-model="importForm.json" rows="10" placeholder='[{"id": "1", "source": "xxx", "text": "内容", "extra": "其他"}]'></textarea>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-primary" @click="importData">导入</button>
+                        <button class="btn btn-secondary" @click="showImport = false">取消</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-overlay" v-if="showDistributeModal">
+                <div class="modal">
+                    <h2>分配任务</h2>
+                    <p style="margin-bottom: 15px;">选择标注员：</p>
+                    <div v-for="user in annotators" :key="user.id" style="margin-bottom: 10px;">
+                        <label>
+                            <input type="checkbox" v-model="distributeForm.userIds" :value="user.id">
+                            {{ user.username }}
+                        </label>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-primary" @click="distributeTasks">确认分配</button>
+                        <button class="btn btn-secondary" @click="showDistributeModal = false">取消</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 添加用户弹窗 -->
+            <div class="modal-overlay" v-if="showUserModal">
+                <div class="modal">
+                    <h2>添加用户</h2>
+                    <div class="form-group">
+                        <label>角色</label>
+                        <select v-model="newUserForm.role" @change="onRoleChange">
+                            <option value="annotator">标注员</option>
+                            <option value="reviewer">审核员</option>
+                            <option value="admin">管理员</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>用户名</label>
+                        <input v-model="newUserForm.username" type="text" :placeholder="'请输入用户名 (将自动添加' + rolePrefix + '前缀)'">
+                    </div>
+                    <div class="form-group">
+                        <label>密码</label>
+                        <div class="password-input">
+                            <input v-model="newUserForm.password" type="password" placeholder="请输入密码" style="width: 100%; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 4px;">
+                            <span class="password-toggle" @click="showPassword = !showPassword">{{ showPassword ? '👁' : '👁‍🗨' }}</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-primary" @click="addUser">添加</button>
+                        <button class="btn btn-secondary" @click="showUserModal = false">取消</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-overlay" v-if="datasetItems.length > 0">
+                <div class="modal" style="max-width: 800px; max-height: 80vh; overflow-y: auto;">
+                    <h2>数据集详情 - {{ selectedDataset.name }}</h2>
+                    <div style="margin-bottom: 15px;">
+                        <button class="btn btn-success" @click="exportData">导出JSON</button>
+                        <button class="btn btn-secondary" @click="datasetItems = []">关闭</button>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>来源</th>
+                                <th>文本</th>
+                                <th>标注结果</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="item in datasetItems" :key="item.id">
+                                <td>{{ item.external_id }}</td>
+                                <td>{{ item.source }}</td>
+                                <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;">{{ item.text }}</td>
+                                <td>
+                                    <span v-if="item.annotation" class="badge" :class="item.annotation.label ? 'badge-done' : 'badge-pending'">
+                                        {{ item.annotation.label ? '有效' : '无效' }}
+                                    </span>
+                                    <span v-else class="badge badge-pending">未标注</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const { createApp, ref, onMounted, computed } = Vue;
+        
+        const API_BASE = 'http://localhost:8000/api';
+        
+        createApp({
+            setup() {
+                const user = ref(null);
+                const currentTab = ref('datasets');
+                const datasets = ref([]);
+                const currentItems = ref([]);
+                const currentPage = ref(1);
+                const totalPages = ref(1);
+                const reviewItems = ref([]);
+                const datasetItems = ref([]);
+                const selectedDataset = ref(null);
+                const annotators = ref([]);
+                const allUsers = ref([]);
+                
+                // 权限判断
+                const canView = computed(() => true);
+                const canAnnotate = computed(() => user.value && (user.value.role === 'annotator' || user.value.role === 'admin' || user.value.role === 'reviewer'));
+                const canReview = computed(() => user.value && (user.value.role === 'reviewer' || user.value.role === 'admin'));
+                const canDistribute = computed(() => user.value && user.value.role === 'admin');
+                const canManageUsers = computed(() => user.value && user.value.role === 'admin');
+                
+                const showRegister = ref(false);
+                const showImport = ref(false);
+                const showDistributeModal = ref(false);
+                const showUserModal = ref(false);
+                const newUserForm = ref({ username: '', password: '', role: 'annotator' });
+                
+                const loginForm = ref({ username: '', password: '' });
+                const registerForm = ref({ username: '', password: '', role: 'annotator' });
+                const importForm = ref({ name: '', json: '' });
+                const distributeForm = ref({ userIds: [] });
+                const annotationFilter = ref('all');
+                const reviewFilter = ref('unreviewed');
+                const showPassword = ref(false);
+                
+                const rolePrefix = computed(() => {
+                    const roleMap = { 'annotator': '标注员', 'reviewer': '审核员', 'admin': '管理员' };
+                    return roleMap[newUserForm.value.role] || '';
+                });
+                
+                const onRoleChange = () => {
+                    const prefix = rolePrefix.value + '-';
+                    if (newUserForm.value.username && !newUserForm.value.username.startsWith(prefix)) {
+                        newUserForm.value.username = prefix;
+                    }
+                };
+                
+                const token = localStorage.getItem('token');
+                
+                const api = axios.create({
+                    baseURL: API_BASE,
+                    headers: token ? { Authorization: `Bearer ${token}` } : {}
+                });
+                
+                const login = async () => {
+                    try {
+                        const res = await api.post('/token', {
+                            username: loginForm.value.username,
+                            password: loginForm.value.password
+                        });
+                        localStorage.setItem('token', res.data.access_token);
+                        window.location.reload();
+                    } catch (e) {
+                        alert('登录失败：' + (e.response?.data?.detail || '未知错误'));
+                    }
+                };
+                
+                const register = async () => {
+                    try {
+                        await api.post('/register', registerForm.value);
+                        alert('注册成功，请登录');
+                        showRegister.value = false;
+                    } catch (e) {
+                        alert('注册失败：' + (e.response?.data?.detail || '未知错误'));
+                    }
+                };
+                
+                const logout = () => {
+                    localStorage.removeItem('token');
+                    user.value = null;
+                    currentItem.value = null;
+                    window.location.href = 'index.html';
+                };
+                
+                const fetchUser = async () => {
+                    try {
+                        const res = await api.get('/me');
+                        user.value = res.data;
+                    } catch (e) {
+                        logout();
+                    }
+                };
+                
+                const fetchDatasets = async () => {
+                    const res = await api.get('/datasets');
+                    datasets.value = res.data;
+                };
+                
+                const goBackToDatasets = async () => {
+                    await fetchDatasets();
+                    currentTab.value = 'datasets';
+                    selectedDataset.value = null;
+                };
+                
+                const importData = async () => {
+                    try {
+                        if (!importForm.value.name || !importForm.value.name.trim()) {
+                            alert('请输入数据集名称');
+                            return;
+                        }
+                        if (!importForm.value.json || !importForm.value.json.trim()) {
+                            alert('请输入JSON数据');
+                            return;
+                        }
+                        const items = JSON.parse(importForm.value.json);
+                        const standardKeys = ['id', 'external_id', 'source', 'text', 'content', 'extra'];
+                        const formattedItems = items.map(item => {
+                            const extra_data = {};
+                            for (const key of Object.keys(item)) {
+                                if (!standardKeys.includes(key)) {
+                                    extra_data[key] = item[key];
+                                }
+                            }
+                            return {
+                                external_id: item.id || item.external_id || String(item),
+                                source: item.source || 'import',
+                                text: item.text || item.content || String(item),
+                                extra_data: extra_data
+                            };
+                        });
+                        await api.post('/datasets', {
+                            name: importForm.value.name,
+                            items: formattedItems
+                        });
+                        showImport.value = false;
+                        importForm.value = { name: '', json: '' };
+                        fetchDatasets();
+                        alert('导入成功');
+                    } catch (e) {
+                        alert('导入失败：' + (e.response?.data?.detail || e.message));
+                    }
+                };
+                
+                const viewDataset = async (ds) => {
+                    selectedDataset.value = ds;
+                    const res = await api.get(`/datasets/${ds.id}/items`);
+                    datasetItems.value = res.data;
+                };
+                
+                const deleteDataset = async (ds) => {
+                    if (!confirm(`确定要删除数据集 "${ds.name}" 吗？此操作不可恢复！`)) return;
+                    try {
+                        await api.delete(`/datasets/${ds.id}`);
+                        fetchDatasets();
+                        alert('数据集已删除');
+                    } catch (e) {
+                        alert('删除失败：' + (e.response?.data?.detail || '未知错误'));
+                    }
+                };
+                
+                const exportData = async () => {
+                    const res = await api.get(`/export/${selectedDataset.value.id}`);
+                    const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${selectedDataset.value.name}_export.json`;
+                    a.click();
+                };
+                
+                const exportDataset = async (ds) => {
+                    const res = await api.get(`/export/${ds.id}`);
+                    const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${ds.name}_标注结果.json`;
+                    a.click();
+                };
+                
+                const fetchAnnotators = async () => {
+                    const res = await api.get('/users');
+                    annotators.value = res.data.filter(u => u.role === 'annotator');
+                };
+                
+                const showDistribute = async (ds) => {
+                    selectedDataset.value = ds;
+                    await fetchAnnotators();
+                    distributeForm.value.userIds = [];
+                    showDistributeModal.value = true;
+                };
+                
+                const startAnnotation = async (ds) => {
+                    selectedDataset.value = ds;
+                    currentPage.value = 1;
+                    currentTab.value = 'annotate';
+                    await fetchAnnotationByDataset(ds.id, 1);
+                };
+                
+                const startReview = async (ds) => {
+                    selectedDataset.value = ds;
+                    currentTab.value = 'review';
+                    await fetchReviewByDataset(ds.id);
+                };
+                
+                const fetchReviewByDataset = async (datasetId) => {
+                    try {
+                        const res = await api.get(`/datasets/${datasetId}/items`);
+                        const filter = reviewFilter.value;
+                        if (filter === 'all') {
+                            reviewItems.value = res.data.filter(i => i.annotation);
+                        } else if (filter === 'unreviewed') {
+                            reviewItems.value = res.data.filter(i => i.annotation && !i.annotation.reviewed);
+                        } else if (filter === 'reviewed') {
+                            reviewItems.value = res.data.filter(i => i.annotation && i.annotation.reviewed);
+                        }
+                    } catch (e) {
+                        console.error('Error fetching review items:', e);
+                        reviewItems.value = [];
+                    }
+                };
+                
+                const onReviewFilterChange = async () => {
+                    if (selectedDataset.value) {
+                        await fetchReviewByDataset(selectedDataset.value.id);
+                    }
+                };
+                
+                const distributeTasks = async () => {
+                    if (distributeForm.value.userIds.length === 0) {
+                        alert('请选择至少一个标注员');
+                        return;
+                    }
+                    await api.post(`/datasets/${selectedDataset.value.id}/distribute`, distributeForm.value.userIds);
+                    showDistributeModal.value = false;
+                    fetchDatasets();
+                    alert('分配成功');
+                };
+                
+                const fetchUsers = async () => {
+                    const res = await api.get('/users');
+                    allUsers.value = res.data;
+                };
+                
+                const addUser = async () => {
+                    if (!newUserForm.value.password) {
+                        alert('请填写密码');
+                        return;
+                    }
+                    const prefix = rolePrefix.value + '-';
+                    let username = newUserForm.value.username.trim();
+                    if (!username) {
+                        alert('请填写用户名');
+                        return;
+                    }
+                    if (!username.startsWith(prefix)) {
+                        username = prefix + username;
+                    }
+                    try {
+                        await api.post('/register', { username: username, password: newUserForm.value.password, role: newUserForm.value.role });
+                        showUserModal.value = false;
+                        newUserForm.value = { username: '', password: '', role: 'annotator' };
+                        fetchUsers();
+                        alert('用户添加成功');
+                    } catch (e) {
+                        alert('添加失败：' + (e.response?.data?.detail || '未知错误'));
+                    }
+                };
+                
+                const updateUserRole = async (u) => {
+                    try {
+                        await api.put(`/users/${u.id}`, { role: u.role });
+                        fetchUsers();
+                        alert('权限更新成功');
+                    } catch (e) {
+                        alert('更新失败');
+                    }
+                };
+                
+                const deleteUser = async (u) => {
+                    if (!confirm(`确定要删除用户 ${u.username} 吗？`)) return;
+                    try {
+                        await api.delete(`/users/${u.id}`);
+                        fetchUsers();
+                        alert('用户已删除');
+                    } catch (e) {
+                        alert('删除失败');
+                    }
+                };
+                
+                const refreshAnnotation = async () => {
+                    currentPage.value = 1;
+                    if (selectedDataset.value) {
+                        await fetchAnnotationByDataset(selectedDataset.value.id, 1);
+                    } else {
+                        await fetchNextAnnotation();
+                    }
+                };
+                
+                const onFilterChange = async () => {
+                    currentPage.value = 1;
+                    if (selectedDataset.value) {
+                        await fetchAnnotationByDataset(selectedDataset.value.id, 1);
+                    }
+                };
+                
+                const fetchNextAnnotation = async () => {
+                    try {
+                        const res = await api.get('/annotation/next?limit=5');
+                        if (res.data.items && res.data.items.length > 0) {
+                            currentItems.value = res.data.items;
+                            totalPages.value = Math.ceil(res.data.items.length / 5);
+                            currentPage.value = 1;
+                        } else {
+                            currentItems.value = [];
+                        }
+                    } catch (e) {
+                        console.error('Error fetching annotation:', e);
+                        currentItems.value = [];
+                    }
+                };
+                
+                const fetchAnnotationByDataset = async (datasetId, page = 1) => {
+                    try {
+                        const filter = annotationFilter.value;
+                        const res = await api.get(`/annotation/dataset/${datasetId}?limit=5&page=${page}&filter=${filter}`);
+                        if (res.data.items) {
+                            currentItems.value = res.data.items;
+                            totalPages.value = res.data.total_pages || 1;
+                            currentPage.value = res.data.page || 1;
+                        } else {
+                            currentItems.value = [];
+                        }
+                    } catch (e) {
+                        console.error('Error fetching annotation:', e);
+                        currentItems.value = [];
+                    }
+                };
+                
+                const submitAnnotation = async (item, label) => {
+                    try {
+                        const remark = item.remark || "";
+                        if (item.annotation) {
+                            await api.put(`/annotation/${item.id}`, { label, remark });
+                        } else {
+                            await api.post(`/annotation/${item.id}`, { label, remark });
+                        }
+                        // 刷新当前数据集的标注列表
+                        if (selectedDataset.value) {
+                            await fetchAnnotationByDataset(selectedDataset.value.id, currentPage.value);
+                        } else {
+                            await fetchNextAnnotation();
+                        }
+                    } catch (e) {
+                        console.error('Submit error:', e);
+                        alert('提交失败');
+                    }
+                };
+                
+                const prevPage = async () => {
+                    if (currentPage.value > 1) {
+                        currentPage.value--;
+                        if (selectedDataset.value) {
+                            await fetchAnnotationByDataset(selectedDataset.value.id, currentPage.value);
+                        }
+                    }
+                };
+                
+                const nextPage = async () => {
+                    if (currentPage.value < totalPages.value) {
+                        currentPage.value++;
+                        if (selectedDataset.value) {
+                            await fetchAnnotationByDataset(selectedDataset.value.id, currentPage.value);
+                        }
+                    }
+                };
+                
+                const fetchReviewItems = async () => {
+                    if (!datasets.value.length) return;
+                    const allItems = [];
+                    for (const ds of datasets.value) {
+                        const res = await api.get(`/datasets/${ds.id}/items`);
+                        allItems.push(...res.data.filter(i => i.annotation));
+                    }
+                    reviewItems.value = allItems;
+                };
+                
+                const approveReview = async (item) => {
+                    await api.post('/review', { annotation_id: item.annotation.id, approved: true });
+                    if (selectedDataset.value) {
+                        await fetchReviewByDataset(selectedDataset.value.id);
+                    }
+                };
+                
+                const rejectReview = async (item) => {
+                    await api.post('/review', { annotation_id: item.annotation.id, approved: false });
+                    if (selectedDataset.value) {
+                        await fetchReviewByDataset(selectedDataset.value.id);
+                    }
+                };
+                
+                const formatDate = (date) => {
+                    return new Date(date).toLocaleString('zh-CN');
+                };
+                
+                onMounted(async () => {
+                    if (token) {
+                        api.defaults.headers.Authorization = `Bearer ${token}`;
+                        await fetchUser();
+                        if (user.value) {
+                            await fetchDatasets();
+                            if (user.value.role === 'admin') {
+                                await fetchUsers();
+                            }
+                        }
+                    }
+                });
+                
+                return {
+                    user, currentTab, datasets, currentItems, currentPage, totalPages, reviewItems, datasetItems, selectedDataset, annotators, allUsers,
+                    showRegister, showImport, showDistributeModal, showUserModal, newUserForm,
+                    canView, canAnnotate, canReview, canDistribute, canManageUsers,
+                    loginForm, registerForm, importForm, distributeForm, showPassword,
+                    login, register, logout, importData, viewDataset, exportData, exportDataset, deleteDataset,
+                    showDistribute, startAnnotation, startReview, fetchReviewByDataset, distributeTasks, fetchNextAnnotation, fetchAnnotationByDataset, submitAnnotation,
+                    fetchUsers, addUser, updateUserRole, deleteUser, refreshAnnotation, annotationFilter, onFilterChange,
+                    reviewFilter, onReviewFilterChange, rolePrefix, onRoleChange, goBackToDatasets,
+                    prevPage, nextPage,
+                    approveReview, rejectReview, formatDate
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
