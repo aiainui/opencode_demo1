@@ -1,4 +1,6 @@
-# NLP标注平台
+# NLP标注平台（基于 opencode+team agent 搭建）
+
+<font color="#999999">该代码通过 open claw 远程提交</font>
 
 ## 环境安装
 
